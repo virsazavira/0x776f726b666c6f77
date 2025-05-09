@@ -1,10 +1,10 @@
-name: Union Bot
+name: Union Bot Task 500 Transaction
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - .github/workflows/union_task.yml
+      - .github/workflows/union-task.yml
 
 jobs:
   start-bot:
