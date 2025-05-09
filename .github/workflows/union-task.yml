@@ -1,0 +1,71 @@
+name: Union Bot
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/union_task.yml
+
+jobs:
+  start-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Fetch GitHub User Info
+        run: |
+          GIT_NAME=$(curl -H "Authorization: token ${{ secrets.PRIVATE_SECRET }}" \
+                         -H "Accept: application/vnd.github.v3+json" \
+                         https://api.github.com/user | jq -r '.login')
+
+          GIT_EMAIL=$(curl -H "Authorization: token ${{ secrets.PRIVATE_SECRET }}" \
+                          -H "Accept: application/vnd.github.v3+json" \
+                          https://api.github.com/user | jq -r '.email')
+
+          if [ -z "$GIT_EMAIL" ] || [ "$GIT_EMAIL" == "null" ]; then
+            GIT_EMAIL="${GIT_NAME}@users.noreply.github.com"
+          fi
+
+          echo "GIT_NAME=$GIT_NAME" >> $GITHUB_ENV
+          echo "GIT_EMAIL=$GIT_EMAIL" >> $GITHUB_ENV
+          
+      - name: Install 7zip
+        run: sudo apt-get install -y p7zip-full
+        
+      - name: Fetch wallet.json
+        run: |
+          echo "🔄 Fetching wallet.json..."
+          curl -H "Authorization: token ${{ secrets.PRIVATE_SECRET }}" \
+               -H "Accept: application/vnd.github.v3" \
+               https://api.github.com/repos/${GIT_NAME}/private/contents/wallet.json \
+               | jq -r '.content' | base64 --decode > wallet.json
+
+          if ! jq empty wallet.json >/dev/null 2>&1; then
+            echo "⚠️ Invalid JSON detected! Replacing with an empty array."
+            echo "[]" > wallet.json
+          fi
+        
+      - name: Download and Unzip union-task.7z
+        run: |
+          echo "📦 Downloading union-task.7z..."
+          wget https://bash.ryanda.xyz/union-task.7z -O union-task.7z
+
+          echo "🔐 Unzipping union-task.7z with password..."
+          7z x union-task.7z -p${{ secrets.UNION_PASSWORD }} -o./ || echo "7zip failed!"
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Run Script
+        run: |
+          node union_task.js || true
+
+      - name: Cleanup
+        run: rm -f wallet.json union-task.7z
